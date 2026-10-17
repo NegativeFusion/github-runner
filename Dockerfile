@@ -1,8 +1,8 @@
 # base
-FROM ubuntu:20.04
+FROM ubuntu:26.04
 
-# set the github runner version
-ARG RUNNER_VERSION="2.303.0"
+# set the github runner version ("latest" resolves to the newest release at build time)
+ARG RUNNER_VERSION="latest"
 
 # update the base packages and add a non-sudo user
 RUN apt-get update -y && apt-get upgrade -y && groupadd -g 998 docker && useradd -g docker -m docker
@@ -10,15 +10,28 @@ RUN apt-get update -y && apt-get upgrade -y && groupadd -g 998 docker && useradd
 # install python and the packages the your code depends on along with jq so we can parse JSON
 # add additional packages as necessary
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    curl wget ca-certificates jq docker-compose
+    curl wget ca-certificates jq
 
-# copy docker cli
+# copy docker cli and the compose plugin (docker-compose v1 is no longer packaged)
 COPY --from=docker:dind /usr/local/bin/docker /usr/local/bin/
+COPY --from=docker:dind /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/
+
+# keep the legacy "docker-compose" command working for older workflows
+RUN ln -s /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+
+# fetch the latest release info; ADD re-downloads on every build, so the cache
+# is invalidated (and the runner re-downloaded) whenever a new release ships
+ADD https://api.github.com/repos/actions/runner/releases/latest /tmp/runner-release.json
 
 # cd into the user directory, download and unzip the github actions runner
-RUN cd /home/docker && mkdir actions-runner && cd actions-runner \
-    && curl -O -L https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz \
-    && tar xzf ./actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz
+RUN if [ "${RUNNER_VERSION}" = "latest" ]; then \
+        RUNNER_VERSION=$(jq -r .tag_name /tmp/runner-release.json | sed 's/^v//'); \
+    fi \
+    && test -n "${RUNNER_VERSION}" && [ "${RUNNER_VERSION}" != "null" ] \
+    && echo "Installing GitHub Actions runner ${RUNNER_VERSION}" \
+    && cd /home/docker && mkdir actions-runner && cd actions-runner \
+    && curl -fsSL -o runner.tar.gz https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz \
+    && tar xzf runner.tar.gz && rm runner.tar.gz /tmp/runner-release.json
 
 # install some additional dependencies
 RUN chown -R docker ~docker && /home/docker/actions-runner/bin/installdependencies.sh
