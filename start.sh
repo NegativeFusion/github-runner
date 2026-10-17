@@ -12,6 +12,10 @@ fi
 
 cd /home/docker/actions-runner
 
+# make files and folders that jobs create group-writable, so anyone in the
+# docker group on the host can manage them too
+umask 0002
+
 ./config.sh --url https://github.com/${ORGANIZATION} --token ${REG_TOKEN}
 
 cleanup() {

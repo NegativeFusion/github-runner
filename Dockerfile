@@ -4,8 +4,16 @@ FROM ubuntu:26.04
 # set the github runner version ("latest" resolves to the newest release at build time)
 ARG RUNNER_VERSION="latest"
 
-# update the base packages and add a non-sudo user
-RUN apt-get update -y && apt-get upgrade -y && groupadd -g 998 docker && useradd -g docker -m docker
+# uid/gid the runner runs as; set them to match the host (see .env) so the
+# runner can write to bind-mounted host folders and use the host docker socket
+ARG RUNNER_UID=1000
+ARG DOCKER_GID=999
+
+# update the base packages and add a non-sudo user (the image's default
+# "ubuntu" user is removed so its uid/gid 1000 are free to reuse)
+RUN apt-get update -y && apt-get upgrade -y \
+    && (userdel -r ubuntu 2>/dev/null || true) \
+    && groupadd -g ${DOCKER_GID} docker && useradd -u ${RUNNER_UID} -g docker -m docker
 
 # install python and the packages the your code depends on along with jq so we can parse JSON
 # add additional packages as necessary

@@ -1,8 +1,11 @@
-version: '3.3'
 
 services:
   github-runner:
-    build: .
+    build:
+        context: .
+        args:
+            - RUNNER_UID=${RUNNER_UID:-1000}
+            - DOCKER_GID=${DOCKER_GID:-999}
     image: github-runner:latest
     container_name: github-runner 
     environment:
