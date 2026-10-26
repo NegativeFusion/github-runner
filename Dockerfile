@@ -18,11 +18,15 @@ RUN apt-get update -y && apt-get upgrade -y \
 # tools jobs commonly expect, as on GitHub's hosted runners: git (without it
 # actions/checkout downloads a tarball instead of a repo), git-lfs, ssh,
 # archives, rsync, make, python3, and jq to parse JSON
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+# (apt-get update runs in the same layer so a cached, stale package index
+# can't point at versions the mirror has since removed)
+RUN apt-get update -y \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     curl wget ca-certificates jq \
     git git-lfs openssh-client gnupg \
     zip unzip xz-utils rsync make \
-    python3 python3-venv
+    python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/*
 
 # copy docker cli and the compose plugin (docker-compose v1 is no longer packaged)
 COPY --from=docker:dind /usr/local/bin/docker /usr/local/bin/
