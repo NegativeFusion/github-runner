@@ -15,14 +15,21 @@ RUN apt-get update -y && apt-get upgrade -y \
     && (userdel -r ubuntu 2>/dev/null || true) \
     && groupadd -g ${DOCKER_GID} docker && useradd -u ${RUNNER_UID} -g docker -m docker
 
-# install python and the packages the your code depends on along with jq so we can parse JSON
-# add additional packages as necessary
+# tools jobs commonly expect, as on GitHub's hosted runners: git (without it
+# actions/checkout downloads a tarball instead of a repo), git-lfs, ssh,
+# archives, rsync, make, python3, and jq to parse JSON
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    curl wget ca-certificates jq
+    curl wget ca-certificates jq \
+    git git-lfs openssh-client gnupg \
+    zip unzip xz-utils rsync make \
+    python3 python3-venv
 
 # copy docker cli and the compose plugin (docker-compose v1 is no longer packaged)
 COPY --from=docker:dind /usr/local/bin/docker /usr/local/bin/
 COPY --from=docker:dind /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/
+# buildx makes docker build use BuildKit (--progress, cache mounts, ...)
+# instead of the deprecated legacy builder
+COPY --from=docker:dind /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/
 
 # keep the legacy "docker-compose" command working for older workflows
 RUN ln -s /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
